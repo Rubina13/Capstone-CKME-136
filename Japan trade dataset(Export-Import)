@@ -1,0 +1,96 @@
+library(ggplot2)
+library(readr)
+library(plyr)
+library(plotly)
+library(dplyr)
+library(tidyr)
+#library(RCurl)
+
+#url<-"E:/Capstone Project/japan dataset/country_eng.csv"
+#country_df<-read.csv(url, header = T, stringAsFactors = F)
+
+
+country_data<-read.csv(file="E:/Capstone Project/japan dataset/country_eng.csv", header=T, stringsAsFactors = F, colClasses = c("Country"="factor"))
+
+hs2_data<-read.csv(file = "E:/Capstone Project/japan dataset/hs2_eng.csv", header = T, stringsAsFactors = F, colClasses = c("hs2"="factor"))
+
+hs4_data<-read.csv(file = "E:/Capstone Project/japan dataset/hs4_eng.csv", header = T, stringsAsFactors = F, colClasses = c("hs4"="factor"))
+
+hs6_data<-read.csv(file = "E:/Capstone Project/japan dataset/hs6_eng.csv", header = T, stringsAsFactors = F, colClasses = c("hs6"="factor"))
+
+hs9_data<-read.csv(file = "E:/Capstone Project/japan dataset/hs9_eng.csv", header = T, stringsAsFactors = F, colClasses = c("hs9"="factor"))
+
+year_latest_data<-read.csv(file = "E:/Capstone Project/japan dataset/year_latest.csv", header = T, stringsAsFactors = F, colClasses = c("Country"="factor", "hs2"="factor", "hs4"="factor", "hs6"="factor", "hs9"="factor"))
+
+ym_latest_data<-read.csv(file = "E:/Capstone Project/japan dataset/ym_latest.csv", header = T, stringsAsFactors = F, colClasses = c("Country"="factor", "hs2"="factor", "hs4"="factor", "hs6"="factor", "hs9"="factor"))
+
+which(is.na(hs4_data))
+which(is.na(hs2_data))
+which(is.na(hs6_data))
+which(is.na(year_latest_data))
+
+## Merge the country and area codes
+merge_year_latest<-join(country_data,year_latest_data,by="Country")
+merge_year_latest<-join(merge_year_latest, hs2_data, by= "hs2")
+merge_year_latest<-join(merge_year_latest, hs4_data, by= "hs4")
+merge_year_latest<-join(merge_year_latest, hs6_data, by= "hs6")
+merge_year_latest<-join(merge_year_latest, hs9_data, by="hs9")
+year_latest_data<-merge_year_latest
+rm(merge_year_latest)
+
+merge_ym_latest<-join(country_data,ym_latest_data,by="Country")
+merge_ym_latest<-join(merge_ym_latest, hs2_data, by= "hs2")
+merge_ym_latest<-join(merge_ym_latest, hs4_data, by= "hs4")
+merge_ym_latest<-join(merge_ym_latest, hs6_data, by= "hs6")
+merge_ym_latest<-join(merge_ym_latest, hs9_data, by="hs9")
+ym_latest_data<-merge_ym_latest
+rm(merge_ym_latest)
+
+## Variables transformation
+## Create new month and derive exp_imp flg
+ym_latest_data$month_char<-month.abb[ym_latest_data$month]
+ym_latest_data$month_char<-factor(ym_latest_data$month_char, levels = month.abb)
+
+addExportFlg<- function(datasets){
+  datasets$type<-ifelse(datasets$exp_imp == 1, "Export", "Import")
+  return(datasets)
+}
+
+smpl<-function(dataset){
+  return(head(dataset,2))
+}
+
+year_latest_data<-addExportFlg(year_latest_data)
+ym_latest_data<-addExportFlg(ym_latest_data)
+
+## Drop some column
+drops<-c("exp_imp", "Country")
+
+#drops<-c("1", "India")
+#drops<-c("Export", "103")
+
+year_latest_data<-year_latest_data[ , !(names(year_latest_data)%in% drops)]
+
+#head(year_latest_data,2)
+
+drops<-c("exp_imp", "Country", "month")
+ym_latest_data<-ym_latest_data[ , !(names(ym_latest_data)%in% drops)]
+
+rm(drops)
+
+## Sample after Transfomation datasets
+head(year_latest_data,2)
+head(ym_latest_data,2)
+
+
+exp_summary_year_Export<-aggregate(as.numeric(year_latest_data$VY),by=list(year_latest_data$Year ,year_latest_data$type, year_latest_data$Area),FUN = sum)
+colnames(exp_summary_year_Export)<-c("Year","Type", "Area","Total.Values")
+
+#imp_summary_ym_Import<-aggregate(as.numeric(ym_latest_data$Year),by=list(ym_latest_data$month ,ym_latest_data$type == 2, ym_latest_data$Area),FUN = sum)
+#colnames(exp_summary_year)<-c("Month","Type", "Area","Total.Values")
+
+g1<-ggplot(exp_summary_year_Export, aes(x=Year, y= Total.Values ,color= Area))
+g1 + geom_point()
+#g2<- g1 + geom_smooth(aes(group = 1),method = "lm", formula = Total.Values ~ Year, se = FALSE, color ="red") + geom_point()
+g1 + geom_point(aes(color = Area)) + facet_wrap(~Type, ncol = 2 )
+g2<-ggplotly(g1 + geom_bar(stat = "Identity") + facet_wrap(~Type))
