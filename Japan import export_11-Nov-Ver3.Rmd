@@ -1,0 +1,693 @@
+---
+title: "Japan Export Import"
+output: word_document
+---
+
+Upload the Files
+```{r}
+library(ggplot2)
+library(readr)
+library(plyr)
+library(plotly)
+library(dplyr)
+library(tidyr)
+
+country_df<-read.csv(file="E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/country_eng.csv", header = TRUE, sep = ",")
+head(country_df)
+
+hs2_df<-read.csv(file = "E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/hs2_eng.csv", header = TRUE, sep = "," )
+head(hs2_df)
+
+hs4_df<-read.csv(file = "E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/hs4_eng.csv", header = TRUE,sep = ",")
+head(hs4_df)
+
+hs6_df<-read.csv(file = "E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/hs6_eng.csv", header = TRUE,sep = ",")
+head(hs6_df)
+
+hs9_df<-read.csv(file = "E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/hs9_eng.csv", header = TRUE,sep = ",")
+head(hs9_df)
+
+year_latest_df<-read.csv(file = "E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/year_latest.csv", header = TRUE,sep = ",")
+head(year_latest_df)
+
+ym_latest_df<-read.csv(file = "E:/Capstone Project/japan dataset/New_dataset/japan-trade-statistics-1988-2016/ym_latest.csv", header = TRUE,sep = ",")
+head(ym_latest_df)
+```
+
+```{r}
+# Check if there is any null value in datasets
+which(is.na(country_df))
+which(is.na(hs2_df))
+which(is.na(hs4_df))
+which(is.na(hs6_df))
+which(is.na(hs9_df))
+which(is.na(year_latest_df))
+which(is.na(ym_latest_df))
+# there is no null values in datasets, so futher process merging the datasets.
+```
+There is no null values in datasets.
+
+```{r}
+## Merge the dataframes year and ym with country
+year_country_df<-merge(country_df,year_latest_df,by="Country")
+ym_country_df<-merge(country_df,ym_latest_df,by="Country")
+
+## Variables transformation
+## Create new month and derive exp_imp flg
+ym_country_df$month_char<-month.abb[ym_country_df$month]
+ym_country_df$month_char<-factor(ym_country_df$month_char, levels = month.abb)
+head(ym_country_df)
+
+addExportFlg<- function(datasets){
+  datasets$type<-ifelse(datasets$exp_imp == 1, "Export", "Import")
+  return(datasets)
+}
+
+smpl<-function(dataset){
+  return(head(dataset,2))
+}
+
+year_country_df<-addExportFlg(year_country_df)
+ym_country_df<-addExportFlg(ym_country_df)
+
+## Drop some columns
+drops<-c("exp_imp", "Country")
+year_country_df<-year_country_df[ , !(names(year_country_df)%in% drops)]
+
+drops<-c("exp_imp", "Country", "month")
+ym_country_df<-ym_country_df[ , !(names(ym_country_df)%in% drops)]
+
+rm(drops)
+## Sample after Transfomation datasets
+head(year_country_df,2)
+summary(year_country_df)
+
+head(ym_country_df,2)
+summary(ym_country_df)
+
+# Trade with each Area as Year wise
+exp_summary_year_Export<-aggregate(as.numeric(year_country_df$VY),by=list(year_country_df$Year, year_country_df$type, year_country_df$Area),FUN = sum)
+colnames(exp_summary_year_Export)<-c("Year","Type", "Area","Total.Values")
+
+g1<-ggplot(exp_summary_year_Export, aes(x=Year, y= Total.Values ,color= Area))
+g1 + geom_point() + facet_wrap(~Type,ncol = 2) + labs(title="Trade with each Area (Year wise)") + theme(plot.title=element_text(size = rel(1)))
+
+# Trade with each Area as Month wise
+exp_summary_ym_Import<-aggregate(as.numeric(ym_country_df$Year),by=list(ym_country_df$month ,ym_country_df$type, ym_country_df$Area),FUN = sum)
+colnames(exp_summary_ym_Import)<-c("Month","Type", "Area","Total.Values")
+
+g1<-ggplot(exp_summary_ym_Import, aes(x=Month, y= Total.Values ,color= Area))  
+g1 + geom_point()+ facet_wrap(~Type, ncol = 2 ) + theme(axis.text.x = element_text(angle = 45,hjust = 1)) + labs(title="Trade with each Area as Month wise") + theme(plot.title=element_text(size = rel(1)))
+```
+
+Trade with each Areas
+```{r}
+# Joined trade records with country name
+areas<-unique(country_df$Area)
+head(areas)
+grouped_by_area<-group_by(year_country_df,Year,Area)
+vys<-aggregate(as.numeric(grouped_by_area$VY),by = list(grouped_by_area$Year,grouped_by_area$Area),FUN = sum)
+colnames(vys)<-c("Year","Area","VY")
+
+ggplot(vys,aes(x=Year,y=VY,color=Area)) + geom_line() + labs(title="Trade with each Areas") + theme(plot.title=element_text(size = rel(1)))
+```
+This graph shows Asia area is the biggest trade partner for Japan and the most growing partner. One thing to note here is that the VY is decreasing at 2008 for all areas. This trend was caused by "Bankruptcy of Lehman Brothers" which hit all around the world. And the VY value does not come back at the same level to before "Bankruptcy of Lehman Brothers" except for Asia area.
+In addition there are two time span when trade value was decreased in the plot between Middle East. Japan depends on the oil imported from mainly Middle East. So the trend was caused by crude oil weaker trend recently. Let's confirm the main goods from Middle East.
+
+```{r}
+# Trade with Middle East Area
+middle_east_countries<-filter(year_country_df,Area=="Middle_East")
+head(middle_east_countries)
+grouped_by_country<-group_by(middle_east_countries,Year,VY,Country_name)
+vys<-aggregate(as.numeric(grouped_by_country$VY),by = list(grouped_by_country$Year,grouped_by_country$Country_name),FUN = sum)
+colnames(vys)<-c("Year","Country_name","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+gp<-ggplot(vys,aes(x=Year,y=VY,color=Country_name)) + geom_line() 
+gp + facet_wrap(~Country_name,ncol=2) + labs(title="Trade with Middle East Countries") + theme(plot.title=element_text(size = rel(1)))
+
+# Trade of different products b/w Middle east-Japan
+middle_hs2_df<-filter(year_country_df,Area=="Middle_East")
+head(middle_hs2_df)
+summary(middle_hs2_df)
+grouped_by_hs2<-group_by(middle_hs2_df,hs2,Year,VY)
+
+# Summarize data
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$Country_name,grouped_by_hs2$hs2),FUN=sum)
+colnames(vys)<-c("Year","Country_name","hs2","VY")
+
+# Merge vys with hs2_df
+vys<-merge(vys,hs2_df,by = "hs2")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+main_goods<-filter(vys,VY >= 0.6)
+hs2_names<-unique(main_goods,main_goods$hs2_name,incomparables = FALSE)
+ggplot(hs2_names,aes(x=hs2_name,y=VY)) + geom_bar(stat = "identity",fill="red",width = 0.8) + coord_flip() + labs(title="Trade of different products with Middle East")
+# Another way
+ggplot(hs2_names,aes(x=Year,y=VY,color=Country_name)) + geom_line() + facet_wrap(~hs2_name,ncol = 5) + labs(title="Trade of different products with Middle East's Countries")
+
+#Merge hs2 with year_country_df
+year_hs2_country<-merge(year_country_df,hs2_df,by="hs2")
+# Trade with different Industrial products b/w Iran-Japan
+iran_df<-filter(year_hs2_country,Country_name == "Iran")
+head(iran_df)
+ggplot(iran_df,aes(x=Year,y=VY,fill=type)) + geom_bar(stat = "identity") + labs(title="Export Import b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+grouped_by_hs2<-group_by(iran_df,Year,VY,hs2,hs2_name)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2,grouped_by_hs2$hs2_name),FUN=sum)
+colnames(vys)<-c("Year","hs2","hs2_name","VY")
+main_goods<-filter(vys,hs2 == c("27","30","39","40","44","70","72","84","85","86","87","88","89","93") )
+main_goods$percent<-prop.table(main_goods$VY)
+head(main_goods)
+# Visualisation View
+gp<-ggplot(main_goods,aes(x=hs2_name,y=VY,fill=hs2_name)) + geom_bar(stat = "identity",fill="red",width = 0.8) + labs(title="Trade of different Industrial products b/w Iran-Japan")
+gp + coord_flip() + theme(plot.title=element_text(size = rel(1))) 
+```
+We can see several goods are traded between Japan and Middle East areas. As expected the most traded goods after 2010 is "Mineral Fuels". "Mineral Fuels" is the only good which trade was decreased from 2014's.
+```{r}
+## Export Import auto mobile(car) b/w Iran-Japan 
+iran_hs2_df<-filter(year_hs2_country,hs2 == "87")
+head(iran_hs2_df)
+grouped_by_df<-group_by(iran_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_df$VY),by=list(grouped_by_df$Year,grouped_by_df$hs2_name,grouped_by_df$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visulization View 
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of auto_mobile(car) b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export Import of Mineral Fuels b/w Iran-Japan
+iran_hs2_df<-filter(year_hs2_country,hs2 == "27" )
+head(iran_hs2_df)
+grouped_by_df<-group_by(iran_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_df$VY),by=list(grouped_by_df$Year,grouped_by_df$hs2_name,grouped_by_df$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visulization View 
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Mineral fuels b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export Import of Machines b/w Iran-Japan
+iran_hs2_df<-filter(year_hs2_country,hs2 == "84")
+head(iran_hs2_df)
+grouped_by_df<-group_by(iran_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_df$VY),by=list(grouped_by_df$Year,grouped_by_df$hs2_name,grouped_by_df$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visulization View 
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Machines b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# export import of Electrical machinery b/w Iran-Japan
+iran_hs2_df<-filter(year_hs2_country,hs2 == "85")
+head(iran_hs2_df)
+grouped_by_df<-group_by(iran_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_df$VY),by=list(grouped_by_df$Year,grouped_by_df$hs2_name,grouped_by_df$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visulization View 
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Electrical Machinery b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of Iron and Steel b/w Iran-Japan
+iran_hs2_df<-filter(year_hs2_country,hs2 == "72")
+head(iran_hs2_df)
+grouped_by_hs2<-group_by(iran_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Iron and Steel b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Merge hs4 with year_country_df
+year_hs4_country<-merge(year_country_df,hs4_df,by="hs4")
+# Trade of different kinds of Crops b/w Iran-Japan
+iran_hs4_df<-filter(year_hs4_country,Country_name == "Iran")
+head(iran_hs4_df)
+grouped_by_hs4<-group_by(iran_hs4_df,Year,VY,hs4,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_crops<-filter(vys,hs4 == c("1004","1005","1006","1007","1101","1102"))
+main_crops$percent<-prop.table(main_crops$VY)
+head(main_crops)
+# Visualisation View
+ggplot(main_crops,aes(x=hs4_name,y=VY,fill =type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of different kinds of Crops b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1))) 
+```
+
+```{r}
+# Trade of different kinds of Vegetables b/w Iran-Japan
+iran_hs4_df<-filter(year_hs4_country,Country_name == "Iran")
+head(iran_hs4_df)
+grouped_by_hs4<-group_by(iran_hs4_df,Year,VY,hs4,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_veges<-filter(vys,hs4 == c(701:710))
+main_veges$percent<-prop.table(main_veges$VY)
+head(main_veges)
+# Visualisation View
+ggplot(main_veges,aes(x=hs4_name,y=VY))  + geom_bar(stat="identity", position = "dodge",fill="red",width = 0.8) + labs(title="Export Import of different kinds of Crops b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+
+# Export Import of Leguminous Vegetables b/w Iran-Japan
+main_vege<-filter(vys,hs4 == "708")
+main_vege$percent<-prop.table(main_vege$VY)
+head(main_vege)
+ggplot(main_vege,aes(x=Year,y=VY,fill = type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Leguminous Vegetables b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of different Fruits b/w Iran-Japan
+iran_hs4_df<-filter(year_hs4_country,Country_name == "Iran")
+head(iran_hs4_df)
+grouped_by_hs4<-group_by(iran_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_fruits<-filter(vys,hs4 == c("803","805","806","807","808","810"))
+main_fruits$percent<-prop.table(main_fruits$VY)
+head(main_fruits)
+ggplot(main_fruits,aes(x=hs4_name,y=VY)) + geom_bar(stat="identity", position = "dodge",fill="red",width = 0.8) + labs(title="Trade of different fruits b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+
+# Export and Import of Grapes b/w Iran-Japan
+main_fruits<-filter(vys,hs4 == "806")
+main_fruits$percent<-prop.table(main_fruits$VY)
+head(main_fruits)
+ggplot(main_fruits,aes(x=Year,y=VY,fill = type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Grapes b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1))) 
+
+# Export and Import of Melons b/w Iran-Japan
+main_fruits<-filter(vys,hs4 == "807")
+main_fruits$percent<-prop.table(main_fruits$VY)
+head(main_fruits)
+ggplot(main_fruits,aes(x=Year,y=VY,fill = type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Melons b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1))) 
+
+# Export and Import of Other Fruits b/w Iran-Japan
+main_fruits<-filter(vys,hs4 == "810")
+main_fruits$percent<-prop.table(main_fruits$VY)
+head(main_fruits)
+ggplot(main_fruits,aes(x=Year,y=VY,fill = type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Other Fruits b/w Iran-Japan") + theme(plot.title=element_text(size = rel(1))) 
+```
+
+
+```{r}
+# Trade of different Oils b/w Iran-Japan
+middle_hs4_df<-filter(year_hs4_country,Country_name == "Saudi_Arabia")
+head(middle_hs4_df)
+grouped_by_hs4<-group_by(middle_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_oils<-filter(vys,hs4 == c("1507","1508","1509","1510","1511"))
+main_oils$percent<-prop.table(main_oils$VY)
+head(main_oils)
+ggplot(main_oils,aes(x=hs4_name,y=VY)) + geom_bar(stat="identity", position = "dodge",fill="red",width = 0.8) + labs(title="Trade of different kinds of Oils b/w Saudi_Arabia-Japan") + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+```
+
+
+```{r, echo=TRUE}
+areas<-unique(country_df$Area)
+grouped_by_area<-group_by(year_country_df,Year,Area)
+vys<-aggregate(as.numeric(grouped_by_area$VY),by = list(grouped_by_area$Year,grouped_by_area$Area),FUN = sum)
+colnames(vys)<-c("Year","Area","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+bp<-ggplot(vys,aes(x=Area,y=VY)) + geom_boxplot(aes(fill=Area)) 
+bp + theme(axis.text.x = element_text(angle = 45,hjust = 1)) + scale_fill_brewer(palette = "PRGn")
+```
+We can see the trade growth (the difference between mean value and high deviation) of Asia area is the most. On the other hand the trade between Japan and North America or Western Europe relatively stable though they are ranked as 2nd and 3rd position. The growth of Middle East is relatively high compared with North America and Western Europe.
+
+Trade with Asian countries
+```{r}
+#Trade with Asian countries
+asian_countries<-filter(year_country_df,Area=="Asia")
+head(asian_countries) 
+summary(asian_countries)
+grouped_by_country<-group_by(asian_countries,Year,VY,Country_name)
+vys<-aggregate(as.numeric(grouped_by_country$VY),by = list(grouped_by_country$Year,grouped_by_country$Country_name),FUN = sum)
+colnames(vys)<-c("Year","Country_name","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+gp<-ggplot(vys,aes(x=Year,y=VY,color=Country_name)) + geom_line() 
+gp + facet_wrap(~Country_name,ncol=4) + labs(title="Trade with Asian Countries") + theme(plot.title=element_text(size = rel(1)))
+
+# Trade of hs2 with Asian Countries
+asian_hs2_df<-filter(year_hs2_country,Area=="Asia")
+which(is.na(asian_hs2_df))
+grouped_by_hs2<-group_by(asian_hs2_df,Year,VY,hs2_name,Country_name)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$Country_name),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","Country_name","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+main_goods<-filter(vys,VY>=0.4 )
+head(main_goods)
+hs2_names<-unique(main_goods,main_goods$hs2_name,incomparables = FALSE)
+for(hs2_name in hs2_names){
+  plot(hs2_names$Year,hs2_names$hs2_name,xlab = "Year",ylab = "hs2_name")
+}
+ggplot(hs2_names,aes(x=hs2_name,y=VY)) + geom_bar(stat = "identity",fill="red") + coord_flip() + labs(title="Trade of different products with Asian Countries")
+# Another Visualisation
+ggplot(hs2_names,aes(x=Year,y=VY,color=Country_name)) + geom_line() + facet_wrap(~hs2_name,ncol=5) + labs(title="Trade of different products with Asian Countries")
+```
+
+Trade with China
+```{r}
+# Trade with different Industrial products b/w China-Japan
+china_df<-filter(year_hs2_country,Country_name == "People's_Republic_of_China")
+head(china_df)
+summary(china_df)
+ggplot(china_df,aes(x=Year,y=VY,fill =type)) + geom_bar(stat = "identity") + labs(title="Export Import b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+grouped_by_hs2<-group_by(china_df,Year,VY,hs2,hs2_name)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2,grouped_by_hs2$hs2_name),FUN=sum)
+colnames(vys)<-c("Year","hs2","hs2_name","VY")
+main_goods<-filter(vys,hs2 == c("27","30","39","40","44","70","72","84","85","86","87","88","89","93") )
+main_goods$percent<-prop.table(main_goods$VY)
+head(main_goods)
+# Visualisation View
+gp<-ggplot(main_goods,aes(x=hs2_name,y=VY,fill=hs2_name)) + geom_bar(stat = "identity",fill="red",width = 0.8) + labs(title="Trade of different Industrial products b/w China-Japan")
+gp + coord_flip() + theme(plot.title=element_text(size = rel(1))) 
+```
+
+```{r}
+# Minor goods trade by China
+minor_goods<-filter(vys,VY < 0.1*1e6 )
+minor_goods$percent<-prop.table(minor_goods$VY)
+head(minor_goods)
+hs2_names<-unique(minor_goods,minor_goods$hs2_name,incomparables = FALSE)
+
+gp<-ggplot(hs2_names,aes(x=hs2_name,y=VY,fill=hs2_name)) + geom_bar(stat = "identity",position = "dodge",fill="red",width = 0.8) + labs(title="Trade of different products with China")
+gp + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+```
+Here we can see that Aircraft and cork are not changing so much.
+##Conclusion
+We can see some interesting points from these data set.
+The trade value was decreased at 2008 all over the world.
+The main goods traded between Japan and Middle East is oil.
+The trade value of crude oil was decreasing recently due to low price of oil.
+China is the biggest trade partner for Japan.
+
+```{r}
+# Trade of Plastics and articles product b/w China & Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "39")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Plastics and articles b/w China & Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of Rubber and articles product b/w China & Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "40")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Rubber and articles b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of Wood and articles product b/w China & Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "44")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Wood and articles b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of Iron and Steel product b/w China-Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "72")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Iron and Steel b/w China & Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of auto_mobile(car) b/w China & Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "87")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of auto_mobile(car) b/w China & Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Electrical Machinery b/w China-Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "85")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Electrical Machinery b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Machines b/w China-Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "84")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Machines b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Aircrafts b/w China-Japan
+china_hs2_df<-filter(year_hs2_country,hs2 == "88")
+head(china_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Aircrafts b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+#merge hs4 with year_country_df
+year_hs4_country<-merge(year_country_df,hs4_df,by="hs4")
+# Trade of different Crops b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,Country_name == "People's_Republic_of_China")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_crops<-filter(vys,hs4 == c("1004","1005","1006","1007","1101","1102"))
+main_crops$percent<-prop.table(main_crops$VY)
+head(main_crops)
+ggplot(main_crops,aes(x=hs4_name,y=VY)) + geom_bar(stat="identity", position = "dodge",fill="red",width = 0.8) + labs(title="Trade of different crops b/w China-Japan") + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+```
+
+```{r}
+# Trade of Maize(corn) b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "1005")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill=type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Maize(corn) b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of Rice b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "1006")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill=type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Rice b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of Wheat b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "1101")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill=type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Wheat b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of different Vegetables b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,Country_name == "People's_Republic_of_China")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_veges<-filter(vys,hs4 == c(701:710))
+main_veges$percent<-prop.table(main_veges$VY)
+head(main_veges)
+ggplot(main_veges,aes(x=hs4_name,y=VY)) + geom_bar(stat="identity", position = "dodge",fill="red",width = 0.8) + labs(title="Trade of different Vegetables b/w China-Japan") + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+```
+
+```{r}
+# Export import of Frozen vegetables b/w china-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "710")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill=type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Frozen Vegetables b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Onions b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "703")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill=type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Onions b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Other vegetables b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "709")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill=type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Other Vegetables b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade of different Fruits b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,Country_name == "People's_Republic_of_China")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+main_fruits<-filter(vys,hs4 == c("803","805","806","807","808","810"))
+main_fruits$percent<-prop.table(main_fruits$VY)
+head(main_fruits)
+ggplot(main_fruits,aes(x=hs4_name,y=VY)) + geom_bar(stat="identity", position = "dodge",fill="red",width = 0.8) + labs(title="Trade of different fruits b/w China-Japan") + theme(plot.title=element_text(size = rel(1))) + coord_flip()
+```
+
+```{r}
+# Export import of Bananas b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "803")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill = type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Bananas b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Grapes b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "806")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill= type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Grapes b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Export import of Apples b/w China-Japan
+china_hs4_df<-filter(year_hs4_country,hs4 == "808")
+head(china_hs4_df)
+grouped_by_hs4<-group_by(china_hs4_df,Year,VY,hs4_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs4$VY),by=list(grouped_by_hs4$Year,grouped_by_hs4$hs4,grouped_by_hs4$hs4_name,grouped_by_hs4$type),FUN=sum)
+colnames(vys)<-c("Year","hs4","hs4_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+ggplot(vys,aes(x=Year,y=VY,fill= type)) + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Apples b/w China-Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
+
+```{r}
+#merge hs6 with year_country_df
+year_hs6_country<-merge(year_country_df,hs6_df,by="hs6")
+china_hs6_df<-filter(year_hs6_country,Country_name == "People's_Republic_of_China")
+head(china_hs6_df)
+grouped_by_hs6<-group_by(china_hs6_df,Year,VY,hs6_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs6$VY),by=list(grouped_by_hs6$Year,grouped_by_hs6$hs6,grouped_by_hs6$hs6_name,grouped_by_hs6$type),FUN=sum)
+colnames(vys)<-c("Year","hs6","hs6_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+main_goods<-filter(vys,hs6 == c("160411","110423","120991","150810","200570"))
+head(main_goods)
+# Visualisation View
+ggplot(main_goods,aes(x=Year,y=VY,color=hs6_name))  + geom_line() + labs(title="Export Import hs6 from China") + theme(plot.title=element_text(size = rel(2)))
+main_goods<-filter(vys,hs6 == "160411")
+ggplot(main_goods,aes(x=Year,y=VY,fill=type))  + geom_bar(stat = "Identity") + labs(title="Export Import Salmon from China") + theme(plot.title=element_text(size = rel(1)))
+```
+
+```{r}
+# Trade with different Industrial products b/w Iran-Japan
+iran_df<-filter(year_hs2_country,Country_name == "Iran")
+head(iran_df)
+grouped_by_hs2<-group_by(iran_df,Year,VY,hs2,hs2_name)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2,grouped_by_hs2$hs2_name),FUN=sum)
+colnames(vys)<-c("Year","hs2","hs2_name","VY")
+main_goods<-filter(vys,hs2 == c("27","30","39","40","44","70","72","84","85","86","87","88","89","93") )
+main_goods$percent<-prop.table(main_goods$VY)
+head(main_goods)
+# Visualisation View
+gp<-ggplot(main_goods,aes(x=hs2_name,y=VY,fill=hs2_name)) + geom_bar(stat = "identity",fill="red",width = 0.8) + labs(title="Trade of different Industrial products b/w Iran-Japan")
+gp + coord_flip() + theme(plot.title=element_text(size = rel(1))) 
+```
+
+```{r}
+# Trade of Rubber and articles product b/w China & Japan
+iran_df<-filter(year_hs2_country,hs2 == "")
+head(iran_hs2_df)
+grouped_by_hs2<-group_by(china_hs2_df,Year,VY,hs2_name,type)
+vys<-aggregate(as.numeric(grouped_by_hs2$VY),by=list(grouped_by_hs2$Year,grouped_by_hs2$hs2_name,grouped_by_hs2$type),FUN=sum)
+colnames(vys)<-c("Year","hs2_name","type","VY")
+vys$percent<-prop.table(vys$VY)
+head(vys)
+# Visualisation View
+ggplot(vys,aes(x=Year,y=VY,fill=type))  + geom_bar(stat="identity", position = "dodge") + labs(title="Export Import of Plastics and articles b/w China & Japan") + theme(plot.title=element_text(size = rel(1)))
+```
+
